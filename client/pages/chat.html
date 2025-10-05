@@ -54,9 +54,18 @@
 
                 <!-- Online Users -->
                 <div class="sidebar-section">
-                    <h3>ONLINE USERS (<span id="onlineCount">0</span>)</h3>
-                    <div class="users-list" id="usersList">
-                        <!-- Users will be populated by JavaScript -->
+                    <div class="sidebar-section-header">
+                        <h3>ONLINE USERS (<span id="onlineCount">0</span>)</h3>
+                        <button class="toggle-users-btn" id="toggleUsersBtn">
+                            <svg width="12" height="12" viewBox="0 0 16 16">
+                                <path fill="currentColor" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
+                            </svg>
+                        </button>
+                    </div>
+                    
+                    <div class="users-list-container" id="usersListContainer">
+                        <div class="users-list" id="usersList">
+                            </div>
                     </div>
                 </div>
             </div>

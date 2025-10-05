@@ -24,6 +24,7 @@ class ChatApp {
         if (!this.currentUser) return;
         this.initializeSidebar();
         this.setupEventListeners();
+        this.setupUserListToggle();
         this.connectToSocket();
     }
 
@@ -172,11 +173,23 @@ class ChatApp {
         document.getElementById('charCount').textContent = '0';
         messageInput.focus();
     }
+    setupUserListToggle() {
+        const header = document.querySelector('.sidebar-section-header');
+        const btn = document.getElementById('toggleUsersBtn');
+        const container = document.getElementById('usersListContainer');
+
+        // Allow clicking anywhere on the header to toggle the list
+        header.addEventListener('click', () => {
+            btn.classList.toggle('open');
+            container.classList.toggle('collapsed');
+        });
+    }
     
     async handleIncomingMessage(messageData) {
         const messages = await window.chatStorage.getGroupMessages(messageData.roomId);
         this.renderMessages(messages);
     }
+
 }
 
 document.addEventListener('DOMContentLoaded', () => new ChatApp());

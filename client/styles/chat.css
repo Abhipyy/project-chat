@@ -734,3 +734,38 @@ html, body {
     align-items: center;
     gap: 0.5rem;
 }
+.sidebar-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer; /* Makes the whole header clickable */
+}
+
+.toggle-users-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 5px;
+    transition: transform 0.2s ease-in-out, background-color 0.2s;
+}
+
+.toggle-users-btn:hover {
+    background-color: var(--background-modifier-hover);
+}
+
+.toggle-users-btn.open {
+    /* Rotates the arrow when the list is open */
+    transform: rotate(90deg);
+}
+
+.users-list-container {
+    max-height: 500px; /* Adjust as needed */
+    overflow: hidden;
+    transition: max-height 0.3s ease-in-out;
+}
+
+.users-list-container.collapsed {
+    max-height: 0;
+}
