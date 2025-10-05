@@ -134,19 +134,28 @@ class ChatApp {
         document.getElementById('messageInput').placeholder = `Message ${this.selectedRoom.name}...`;
     }
 
-    renderMessages(messages) {
+   renderMessages(messages) {
         const messagesContainer = document.getElementById('messagesContainer');
         messagesContainer.innerHTML = '';
-        messages.forEach(msg => {
+         messages.forEach(msg => {
             const isOwn = msg.username === this.currentUser.username;
             const messageElement = document.createElement('div');
             messageElement.className = `message ${isOwn ? 'own' : ''}`;
-            const senderName = isOwn ? 'You' : msg.username;
-            const avatarChar = msg.username.charAt(0).toUpperCase();
-            messageElement.innerHTML = `<div class="message-avatar">${avatarChar}</div><div class="message-bubble"><div class="message-sender">${senderName}</div><div class="message-content">${msg.content}</div><div class="message-time">${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div></div>`;
+
+            // ✅ USE A CONDITIONAL TO SET THE HTML
+            if (isOwn) {
+                // Your own messages: No avatar or sender name
+                messageElement.innerHTML = `<div class="message-bubble"><div class="message-content">${msg.content}</div><div class="message-time">${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div></div>`;
+            } else {
+                // Messages from others: Include avatar and sender name
+                const senderName = msg.username;
+               const avatarChar = msg.username.charAt(0).toUpperCase();
+               messageElement.innerHTML = `<div class="message-avatar">${avatarChar}</div><div class="message-bubble"><div class="message-sender">${senderName}</div><div class="message-content">${msg.content}</div><div class="message-time">${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div></div>`;
+            }
+        
             messagesContainer.appendChild(messageElement);
         });
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
 
     sendMessage() {
