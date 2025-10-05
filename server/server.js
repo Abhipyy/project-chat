@@ -74,6 +74,8 @@ io.on('connection', (socket) => {
         onlineUsers.set(socket.id, { username });
         broadcastOnlineUsers();
 
+        socket.emit('update_online_users', Array.from(onlineUsers.values()).map(user => ({ username: user.username })));
+
         const groups = await db.all('SELECT * FROM groups');
         const users = await db.all('SELECT id, username FROM users');
         socket.emit('initial_data', { groups, users });
@@ -122,6 +124,15 @@ io.on('connection', (socket) => {
         const groups = await db.all('SELECT * FROM groups');
         io.emit('initial_data', { groups, users: await db.all('SELECT id, username FROM users') });
     });
+    socket.on('user_logged_out', () => {
+        const user = onlineUsers.get(socket.id);
+        if (user) {
+            console.log(`🚪 User logged out: ${user.username} (Socket ID: ${socket.id})`);
+            onlineUsers.delete(socket.id);
+            broadcastOnlineUsers(); // Update the online list for everyone
+        }
+    });
+
     socket.on('disconnect', () => {
         const user = onlineUsers.get(socket.id);
         if (user) {

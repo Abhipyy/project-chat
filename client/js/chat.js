@@ -100,6 +100,7 @@ class ChatApp {
         });
         logoutBtn.addEventListener('click', async () => {
             if (confirm('Are you sure you want to logout?')) {
+                if(this.socket) this.socket.emit('user_logged_out');
                 if (window.chatStorage) {
                     await window.chatStorage.clearAllData();
                 }
