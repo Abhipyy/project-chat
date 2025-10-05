@@ -26,6 +26,14 @@ async function initDb() {
         CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, password TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS groups (id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT);
         CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, messageId TEXT UNIQUE NOT NULL, roomId TEXT NOT NULL, username TEXT NOT NULL, content TEXT NOT NULL, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);
+        CREATE TABLE IF NOT EXISTS direct_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            messageId TEXT UNIQUE NOT NULL,
+            sender TEXT NOT NULL,
+            receiver TEXT NOT NULL,
+            content TEXT NOT NULL,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
     `);
     await db.run(`INSERT INTO groups (id, name, description) VALUES ('general', 'Secure General', 'Main encrypted channel') ON CONFLICT(id) DO NOTHING`);
     console.log('🏛️ Database tables are ready.');
@@ -59,13 +67,24 @@ app.post('/login', async (req, res) => {
     }
 });
 
-// --- Helper function to broadcast online users (No changes here) ---
+// --- Helper functions ---
 function broadcastOnlineUsers() {
     const allUsernames = Array.from(onlineUsers.values()).map(user => user.username);
     const uniqueUsernames = [...new Set(allUsernames)];
     const userListPayload = uniqueUsernames.map(username => ({ username }));
     io.emit('update_online_users', userListPayload);
 }
+
+// ✅ NEW HELPER to find a user's socket by their username
+function findSocketByUsername(username) {
+    for (const [id, socketData] of onlineUsers.entries()) {
+        if (socketData.username === username) {
+            return io.sockets.sockets.get(id);
+        }
+    }
+    return null;
+}
+
 
 // --- Real-Time Socket.IO Logic ---
 io.on('connection', (socket) => {
@@ -78,7 +97,12 @@ io.on('connection', (socket) => {
 
         const groups = await db.all('SELECT * FROM groups');
         const users = await db.all('SELECT id, username FROM users');
-        socket.emit('initial_data', { groups, users });
+        const dmPartners = await db.all(`
+          SELECT DISTINCT receiver AS username FROM direct_messages WHERE sender = ?
+          UNION
+          SELECT DISTINCT sender AS username FROM direct_messages WHERE receiver = ?
+      `, [username, username]);
+        socket.emit('initial_data', { groups, users, directMessagePartners: dmPartners });
     });
 
     socket.on('request_room_history', async ({ roomId }) => {
@@ -86,31 +110,76 @@ io.on('connection', (socket) => {
         socket.emit('room_history', { roomId, messages });
     });
 
-    // --- LOGIC CHANGE ---
     socket.on('send_message', async (messageData) => {
-    const user = onlineUsers.get(socket.id);
-    if (!user || user.username !== messageData.username) return;
+        const user = onlineUsers.get(socket.id);
+        if (!user || user.username !== messageData.username) return;
 
-    try {
-        await db.run('INSERT INTO messages (messageId, roomId, username, content, timestamp) VALUES (?, ?, ?, ?, ?)', [messageData.messageId, messageData.roomId, messageData.username, messageData.content, messageData.timestamp]);
-        
-        // ✅ ADD THE SENDER'S SOCKET ID TO THE PAYLOAD
-        const broadcastData = {
-            ...messageData,
-            senderSocketId: socket.id 
-        };
-
-        // Broadcast the data with the sender's ID
-        socket.broadcast.emit('receive_message', broadcastData);
-        
-        console.log(`💬 [${broadcastData.roomId}] ${user.username}: ${broadcastData.content}`);
-
-    } catch (error) {
-        console.error("DATABASE ERROR on send_message:", error);
-    }
-});
+        try {
+            await db.run('INSERT INTO messages (messageId, roomId, username, content, timestamp) VALUES (?, ?, ?, ?, ?)', [messageData.messageId, messageData.roomId, messageData.username, messageData.content, messageData.timestamp]);
+            
+            const broadcastData = {
+                ...messageData,
+                senderSocketId: socket.id 
+            };
+            socket.broadcast.emit('receive_message', broadcastData);
+            
+            console.log(`💬 [${broadcastData.roomId}] ${user.username}: ${broadcastData.content}`);
+        } catch (error) {
+            console.error("DATABASE ERROR on send_message:", error);
+        }
+    });
     
-    // (No changes to the rest of the file)
+    // ✅ --- NEW DIRECT MESSAGE EVENTS ---
+
+    // Event to fetch DM history
+    socket.on('request_dm_history', async ({ targetUser }) => {
+        const currentUser = onlineUsers.get(socket.id)?.username;
+        if (!currentUser) return;
+
+        const messages = await db.all(
+            `SELECT * FROM direct_messages 
+             WHERE (sender = ? AND receiver = ?) OR (sender = ? AND receiver = ?) 
+             ORDER BY timestamp ASC`,
+            [currentUser, targetUser, targetUser, currentUser]
+        );
+        socket.emit('dm_history', { withUser: targetUser, messages });
+    });
+
+    // Event to handle sending a DM
+    socket.on('send_dm', async (messageData) => {
+        const senderUsername = onlineUsers.get(socket.id)?.username;
+        if (!senderUsername || senderUsername !== messageData.sender) return;
+
+        // Save message to DB
+        await db.run(
+            'INSERT INTO direct_messages (messageId, sender, receiver, content, timestamp) VALUES (?, ?, ?, ?, ?)',
+            [messageData.messageId, messageData.sender, messageData.receiver, messageData.content, messageData.timestamp]
+        );
+
+        // Find the receiver's socket to send the message in real-time
+        const receiverSocket = findSocketByUsername(messageData.receiver);
+        if (receiverSocket) {
+            receiverSocket.emit('receive_dm', messageData);
+        }
+        console.log(`💬 [DM] ${messageData.sender} to ${messageData.receiver}: ${messageData.content}`);
+    });
+
+    // Event to handle deleting a DM conversation
+    socket.on('delete_dm_conversation', async ({ targetUser }) => {
+        const currentUser = onlineUsers.get(socket.id)?.username;
+        if (!currentUser) return;
+
+        await db.run(
+            `DELETE FROM direct_messages 
+             WHERE (sender = ? AND receiver = ?) OR (sender = ? AND receiver = ?)`,
+            [currentUser, targetUser, targetUser, currentUser]
+        );
+        console.log(`🗑️ [DM] Conversation between ${currentUser} and ${targetUser} deleted.`);
+        socket.emit('dm_conversation_deleted', { withUser: targetUser });
+    });
+
+    // --- END of new DM events ---
+
     socket.on('create_group', async ({ name, description }) => {
         const user = onlineUsers.get(socket.id);
         if (!user) return;
@@ -132,7 +201,7 @@ io.on('connection', (socket) => {
         if (user) {
             console.log(`🚪 User logged out: ${user.username} (Socket ID: ${socket.id})`);
             onlineUsers.delete(socket.id);
-            broadcastOnlineUsers(); // Update the online list for everyone
+            broadcastOnlineUsers();
         }
     });
 

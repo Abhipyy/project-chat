@@ -130,14 +130,19 @@ class SidebarManager {
             const avatarChar = user.username.charAt(0).toUpperCase();
 
             userItem.innerHTML = `
-                <div class="user-item-avatar">
-                    <span>${avatarChar}</span>
-                    <div class="online-indicator"></div>
-                </div>
-                <div class="user-item-info">
-                    <div class="user-item-name">${user.username}</div>
-                </div>
-            `;
+            <div class="user-item-avatar online">
+                <span>${avatarChar}</span>
+            </div>
+            <div class="user-item-info">
+                <div class="user-item-name">${user.username}</div>
+            </div>
+        `;
+            userItem.addEventListener('click', () => {
+                // This is a placeholder for now. The main ChatApp will handle the logic.
+                // We'll use a custom event to notify the main app.
+                const event = new CustomEvent('startDM', { detail: { user: user } });
+                document.dispatchEvent(event);
+            });
             usersList.appendChild(userItem);
         });
     }

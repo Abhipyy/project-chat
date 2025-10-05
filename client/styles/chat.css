@@ -112,7 +112,7 @@ body {
     font-size: 0.875rem;
 }
 
-.online-indicator {
+/* .online-indicator {
     position: absolute;
     bottom: -2px;
     right: -2px;
@@ -121,7 +121,7 @@ body {
     background-color: hsl(var(--online));
     border: 2px solid hsl(var(--card));
     border-radius: 50%;
-}
+} */
 
 .user-info {
     flex: 1;
@@ -275,23 +275,25 @@ body {
     background-color: hsl(var(--muted));
 }
 
-.user-item-avatar {
-    position: relative;
-    width: 2rem;
-    height: 2rem;
-}
-
-.user-item-avatar span {
-    width: 100%;
-    height: 100%;
+.user-item .user-item-avatar {
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
-    background: hsl(var(--muted));
-    display: flex;
+    
+    display: flex !important; /* The !important ensures this is prioritized */
     align-items: center;
     justify-content: center;
-    font-size: 0.875rem;
-    border: 2px solid black;
+
+    font-weight: bold;
+    color: #fff;
+    margin-right: 10px;
+    background-color: var(--background-secondary-alt);
+    box-sizing: border-box;
+    transition: border-color 0.3s ease;
+    flex-shrink: 0;
 }
+
+
 
 .user-item-info {
     flex: 1;
@@ -815,4 +817,108 @@ html, body {
     position: relative;
     display: flex;
     align-items: center;
+}
+.dm-list .user-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.dm-list .user-item:hover {
+    background-color: var(--background-modifier-hover);
+}
+
+.dm-list .user-item.active {
+    background-color: var(--background-modifier-selected);
+}
+
+.dm-list .user-item .user-item-info {
+    flex-grow: 1; /* Allow info to take up space */
+}
+.dm-list .user-item .user-item-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    color: #fff;
+    margin-right: 10px;
+    background-color: var(--background-secondary-alt); /* A default background */
+}
+
+/* Status indicator for DMs */
+/* .dm-status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 8px;
+} */
+
+.dm-status-indicator.online {
+    background-color: #43b581; /* Green */
+}
+
+.dm-status-indicator.offline {
+    background-color: #747f8d; /* Gray */
+    border: 1px solid var(--background-primary);
+}
+
+/* DM Delete Button */
+.delete-dm-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 0 5px;
+    opacity: 0; /* Hidden by default */
+    transition: opacity 0.2s;
+}
+
+.dm-list .user-item:hover .delete-dm-btn {
+    opacity: 1; /* Show on hover */
+}
+.dm-list .user-item .user-item-info {
+    display: flex;
+    align-items: center;
+    flex-grow: 1;
+    overflow: hidden; /* Prevents long names from breaking layout */
+}
+
+/* This styles the username text inside the DM item */
+.dm-list .user-item .user-item-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Positions the small online/offline dot next to the username */
+.dm-list .user-item .dm-status-indicator {
+    /* We reuse the same class but give it a specific size for this context */
+    width: 8px;
+    height: 8px;
+    margin-left: 8px;
+    flex-shrink: 0; /* Prevents the dot from shrinking */
+}
+
+/* Repositions the notification badge for the DM list */
+.dm-list .user-item .notification-badge {
+    margin-left: 5px; /* Keep some space from the delete button */
+}
+.user-item-avatar.online {
+    border: 2px solid #43b581; /* Green border for online */
+}
+
+.user-item-avatar.offline {
+    border: 2px solid #747f8d; /* Dull gray border for offline */
+}
+
+/* Ensure the avatar in the DM list also gets the border */
+.dm-list .user-item .user-item-avatar {
+    background-color: var(--background-secondary-alt);
 }

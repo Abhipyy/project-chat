@@ -1,10 +1,10 @@
-// Database configuration and operations for client-side caching
+// In client/js/database.js
+
 const DB_NAME = 'SecureChatClientCache';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // ✅ IMPORTANT: Increment the version to trigger an update
 
-let db; // Global reference to the database connection
+let db;
 
-// Initialize IndexedDB
 async function initDB() {
     if (db) return db;
 
@@ -17,18 +17,21 @@ async function initDB() {
         };
         request.onupgradeneeded = (event) => {
             const dbInstance = event.target.result;
-            if (dbInstance.objectStoreNames.contains('messages')) {
-                dbInstance.deleteObjectStore('messages');
+            // Group messages store
+            if (!dbInstance.objectStoreNames.contains('group_messages')) {
+                const messagesStore = dbInstance.createObjectStore('group_messages', { keyPath: 'messageId' });
+                messagesStore.createIndex('roomId', 'roomId', { unique: false });
             }
-            // Use 'messageId' as the unique keyPath to prevent duplicates
-            const messagesStore = dbInstance.createObjectStore('messages', { keyPath: 'messageId' });
-            messagesStore.createIndex('roomId', 'roomId', { unique: false });
-            messagesStore.createIndex('timestamp', 'timestamp', { unique: false });
+            // ✅ NEW Direct messages store
+            if (!dbInstance.objectStoreNames.contains('direct_messages')) {
+                const dmsStore = dbInstance.createObjectStore('direct_messages', { keyPath: 'messageId' });
+                // Create an index to easily query messages between two users
+                dmsStore.createIndex('participants', ['sender', 'receiver']);
+            }
         };
     });
 }
 
-// Generic helper for database operations
 async function dbOperation(storeName, mode, callback) {
     const db = await initDB();
     return new Promise((resolve, reject) => {
@@ -39,34 +42,45 @@ async function dbOperation(storeName, mode, callback) {
     });
 }
 
-// Public API for the local message cache
 window.chatStorage = {
-    async saveMessage(messageData) {
-        // This will now automatically ignore duplicates because the 'messageId' is the key.
-        return dbOperation('messages', 'readwrite', (store, resolve, reject) => {
-            // Use 'put' instead of 'add' to be safe. It adds or updates.
+    // ✅ MODIFIED to handle both DMs and group messages
+    async saveMessage(messageData, isDM = false) {
+        const storeName = isDM ? 'direct_messages' : 'group_messages';
+        return dbOperation(storeName, 'readwrite', (store, resolve) => {
             const request = store.put(messageData);
             request.onsuccess = () => resolve(request.result);
-            request.onerror = (e) => reject('Failed to save message: ' + e.target.error);
         });
     },
     async getGroupMessages(groupId) {
-        return new Promise(async (resolve, reject) => {
-            await dbOperation('messages', 'readonly', (store) => {
-                const index = store.index('roomId');
-                const request = index.getAll(IDBKeyRange.only(groupId));
-                request.onsuccess = () => resolve(request.result.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp)));
-                request.onerror = (e) => reject(e);
-            });
+        return dbOperation('group_messages', 'readonly', (store, resolve) => {
+            const index = store.index('roomId');
+            const request = index.getAll(groupId);
+            request.onsuccess = () => resolve(request.result.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp)));
+        });
+    },
+    // ✅ NEW function to get DMs
+    async getDMMessages(userA, userB) {
+        return dbOperation('direct_messages', 'readonly', async (store, resolve) => {
+            const allMessages = [];
+            // Find messages from A to B
+            const index = store.index('participants');
+            const req1 = index.getAll([userA, userB]);
+            req1.onsuccess = () => {
+                allMessages.push(...req1.result);
+                // Find messages from B to A
+                const req2 = index.getAll([userB, userA]);
+                req2.onsuccess = () => {
+                    allMessages.push(...req2.result);
+                    // Sort combined messages by time and resolve
+                    resolve(allMessages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp)));
+                };
+            };
         });
     },
     async clearAllData() {
-        return dbOperation('messages', 'readwrite', (store, resolve) => {
-            const request = store.clear();
-            request.onsuccess = () => resolve();
-        });
+        await dbOperation('group_messages', 'readwrite', (store, resolve) => store.clear().onsuccess = resolve);
+        await dbOperation('direct_messages', 'readwrite', (store, resolve) => store.clear().onsuccess = resolve);
     }
 };
 
-// Initialize the database when the script loads
 document.addEventListener('DOMContentLoaded', initDB);
