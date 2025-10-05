@@ -772,16 +772,15 @@ html, body {
     transition: max-height 0.3s ease-in-out, padding 0.3s ease-in-out;
 
     /* Original styles */
-    max-height: 500px;
+    max-height: 0px;
     overflow: hidden;
-}
-
-.users-list-container.collapsed {
-    max-height: 0;
-    
-    /* --- NEW: Animate the padding to zero when collapsed --- */
     padding-top: 0;
     padding-bottom: 0;
+}
+
+.users-list-container:not(.collapsed) {
+    max-height: 500px;
+    padding: 10px;
 }
 .user-item:hover .user-item-name {
     color: rgba(255, 255, 255, 0.8); /* A neutral white for the text on hover */
