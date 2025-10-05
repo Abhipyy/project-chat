@@ -25,6 +25,7 @@ class ChatApp {
         this.initializeSidebar();
         this.setupEventListeners();
         this.setupUserListToggle();
+        this.setupChatSettingsDropdown();
         this.connectToSocket();
         document.addEventListener('startDM', (e) => this.startDM(e.detail.user));
     }
@@ -113,6 +114,55 @@ class ChatApp {
             if (this.currentView === 'dm' && this.selectedRoom?.username === withUser) {
                 this.selectRoom(this.sidebarManager.getRoomById('general'), 'group');
             }
+        });
+        this.socket.on('chat_history_cleared', async ({ roomId }) => {
+            // Clear the messages from the local IndexedDB
+            await window.chatStorage.clearGroupMessages(roomId);
+            // If the cleared chat is the one we're viewing, refresh the screen
+            if (this.currentView === 'group' && this.selectedRoom?.id === roomId) {
+                this.renderMessages([], 'group'); // Render an empty array
+            }
+        });
+        this.socket.on('dm_history_cleared', async ({ withUser }) => {
+            await window.chatStorage.clearDMMessages(this.currentUser.username, withUser);
+            if (this.currentView === 'dm' && this.selectedRoom?.username === withUser) {
+                this.renderMessages([], 'dm');
+            }
+        });
+    }
+    setupChatSettingsDropdown() {
+        const settingsBtn = document.getElementById('chatSettingsBtn');
+        const dropdownMenu = document.getElementById('chatDropdownMenu');
+        const clearChatBtn = document.getElementById('clearChatBtn');
+
+        settingsBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dropdownMenu.classList.toggle('show');
+        });
+
+        // ✅ MODIFIED to handle both DMs and groups
+        clearChatBtn.addEventListener('click', () => {
+            if (!this.selectedRoom) return;
+
+            let confirmationText;
+            let payload;
+
+            if (this.currentView === 'group') {
+                confirmationText = `Are you sure you want to clear all messages in "${this.selectedRoom.name}"? This will delete the history for everyone.`;
+                payload = { roomId: this.selectedRoom.id, isDM: false };
+            } else { // It's a DM
+                confirmationText = `Are you sure you want to clear your chat history with "${this.selectedRoom.username}"? This will delete the history for both of you.`;
+                payload = { targetUser: this.selectedRoom.username, isDM: true };
+            }
+
+            if (confirm(confirmationText)) {
+                this.socket.emit('clear_chat_history', payload);
+            }
+            dropdownMenu.classList.remove('show');
+        });
+
+        document.addEventListener('click', () => {
+            dropdownMenu.classList.remove('show');
         });
     }
 

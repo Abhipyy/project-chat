@@ -213,6 +213,38 @@ io.on('connection', (socket) => {
             broadcastOnlineUsers();
         }
     });
+    socket.on('clear_chat_history', async ({ roomId, isDM, targetUser }) => {
+      const user = onlineUsers.get(socket.id);
+      if (!user) return;
+
+      try {
+          if (isDM) {
+              // ✅ NEW: Handle DM clearing
+              await db.run(
+                  `DELETE FROM direct_messages 
+                  WHERE (sender = ? AND receiver = ?) OR (sender = ? AND receiver = ?)`,
+                  [user.username, targetUser, targetUser, user.username]
+              );
+              console.log(`🗑️ DM history between ${user.username} and ${targetUser} cleared.`);
+              
+              // Notify both users to clear their view
+              const targetSocket = findSocketByUsername(targetUser);
+              socket.emit('dm_history_cleared', { withUser: targetUser });
+              if (targetSocket) {
+                  targetSocket.emit('dm_history_cleared', { withUser: targetUser });
+              }
+
+          } else {
+              // Existing logic for groups
+              await db.run('DELETE FROM messages WHERE roomId = ?', [roomId]);
+              console.log(`🗑️ Chat history for room ${roomId} cleared by ${user.username}.`);
+              io.emit('chat_history_cleared', { roomId });
+          }
+
+      } catch (error) {
+          console.error(`Failed to clear chat history:`, error);
+      }
+  });
 });
 
 // --- Server Start ---

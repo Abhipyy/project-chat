@@ -77,6 +77,58 @@ window.chatStorage = {
             };
         });
     },
+    async clearDMMessages(userA, userB) {
+        return dbOperation('direct_messages', 'readwrite', (store, resolve) => {
+            const index = store.index('participants');
+            
+            const deletePromises = [];
+
+            const deleteRequest1 = new Promise(res => {
+                const req = index.openCursor(IDBKeyRange.only([userA, userB]));
+                req.onsuccess = event => {
+                    const cursor = event.target.result;
+                    if (cursor) {
+                        cursor.delete();
+                        cursor.continue();
+                    } else {
+                        res();
+                    }
+                };
+            });
+            deletePromises.push(deleteRequest1);
+
+            const deleteRequest2 = new Promise(res => {
+                const req = index.openCursor(IDBKeyRange.only([userB, userA]));
+                req.onsuccess = event => {
+                    const cursor = event.target.result;
+                    if (cursor) {
+                        cursor.delete();
+                        cursor.continue();
+                    } else {
+                        res();
+                    }
+                };
+            });
+            deletePromises.push(deleteRequest2);
+
+            Promise.all(deletePromises).then(resolve);
+        });
+    },
+    async clearGroupMessages(groupId) {
+        return dbOperation('group_messages', 'readwrite', (store, resolve) => {
+            const index = store.index('roomId');
+            const request = index.openCursor(IDBKeyRange.only(groupId));
+            request.onsuccess = (event) => {
+                const cursor = event.target.result;
+                if (cursor) {
+                    cursor.delete();
+                    cursor.continue();
+                } else {
+                    resolve(); // Done deleting
+                }
+            };
+        });
+    },
     async clearAllData() {
         await dbOperation('group_messages', 'readwrite', (store, resolve) => store.clear().onsuccess = resolve);
         await dbOperation('direct_messages', 'readwrite', (store, resolve) => store.clear().onsuccess = resolve);

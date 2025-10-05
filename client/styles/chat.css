@@ -922,3 +922,22 @@ html, body {
 .dm-list .user-item .user-item-avatar {
     background-color: var(--background-secondary-alt);
 }
+.chat-header {
+    /* Ensure it's a flex container */
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.chat-settings-dropdown {
+    position: relative;
+}
+
+/* We can reuse the dropdown menu styles from the sidebar */
+.chat-settings-dropdown .dropdown-menu {
+    /* Position it correctly for this header */
+    top: 100%;
+    right: 0;
+    margin-top: 5px;
+    z-index: 1001; /* Ensure it's above other content */
+}
