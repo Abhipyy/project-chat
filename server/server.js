@@ -87,25 +87,28 @@ io.on('connection', (socket) => {
     });
 
     // --- LOGIC CHANGE ---
-    socket.on('send_message', async (messageData) => { // The full message object now comes from the client
-        const user = onlineUsers.get(socket.id);
-        // Basic validation to ensure the sender is who they say they are
-        if (!user || user.username !== messageData.username) return;
+    socket.on('send_message', async (messageData) => {
+    const user = onlineUsers.get(socket.id);
+    if (!user || user.username !== messageData.username) return;
 
-        try {
-            // Save the message received from the client to the database
-            await db.run('INSERT INTO messages (messageId, roomId, username, content, timestamp) VALUES (?, ?, ?, ?, ?)', [messageData.messageId, messageData.roomId, messageData.username, messageData.content, messageData.timestamp]);
-            
-            // --- CRITICAL CHANGE: Broadcast to everyone EXCEPT the original sender ---
-            socket.broadcast.emit('receive_message', messageData);
-            
-            console.log(`💬 [${messageData.roomId}] ${user.username}: ${messageData.content}`);
+    try {
+        await db.run('INSERT INTO messages (messageId, roomId, username, content, timestamp) VALUES (?, ?, ?, ?, ?)', [messageData.messageId, messageData.roomId, messageData.username, messageData.content, messageData.timestamp]);
+        
+        // ✅ ADD THE SENDER'S SOCKET ID TO THE PAYLOAD
+        const broadcastData = {
+            ...messageData,
+            senderSocketId: socket.id 
+        };
 
-        } catch (error) {
-            // Added proper error handling to prevent server crashes
-            console.error("DATABASE ERROR on send_message:", error);
-        }
-    });
+        // Broadcast the data with the sender's ID
+        socket.broadcast.emit('receive_message', broadcastData);
+        
+        console.log(`💬 [${broadcastData.roomId}] ${user.username}: ${broadcastData.content}`);
+
+    } catch (error) {
+        console.error("DATABASE ERROR on send_message:", error);
+    }
+});
     
     // (No changes to the rest of the file)
     socket.on('create_group', async ({ name, description }) => {

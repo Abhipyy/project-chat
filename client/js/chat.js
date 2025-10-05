@@ -16,6 +16,7 @@ class ChatApp {
         this.selectedRoom = null;
         this.socket = null;
         this.sidebarManager = null;
+         this.unreadMessages = new Map();
         this.init();
     }
 
@@ -68,6 +69,14 @@ class ChatApp {
         });
 
         this.socket.on('receive_message', (messageData) => {
+            // ✅ ADD THIS LOGIC
+            // If the message is for a room we are not in, and it's not our own message, mark it as unread
+            if ((!this.selectedRoom || messageData.roomId !== this.selectedRoom.id) && messageData.senderSocketId !== this.socket.id) {
+                const currentCount = this.unreadMessages.get(messageData.roomId) || 0;
+                this.unreadMessages.set(messageData.roomId, currentCount + 1);
+                this.updateNotificationBadge(messageData.roomId, true);
+            }
+
             window.chatStorage.saveMessage(messageData).then(() => {
                 if (this.selectedRoom && messageData.roomId === this.selectedRoom.id) {
                     this.handleIncomingMessage(messageData);
@@ -78,6 +87,7 @@ class ChatApp {
         this.socket.on('update_online_users', (onlineUsers) => {
             this.sidebarManager.updateOnlineUsers(onlineUsers);
         });
+        
     }
 
     setupEventListeners() {
@@ -116,6 +126,8 @@ class ChatApp {
     async selectRoom(room) {
         this.selectedRoom = room;
         this.updateChatHeader();
+        this.unreadMessages.delete(room.id);
+        this.updateNotificationBadge(room.id, false);
         
         const messages = await window.chatStorage.getGroupMessages(room.id);
         
@@ -123,6 +135,24 @@ class ChatApp {
             this.socket.emit('request_room_history', { roomId: room.id });
         } else {
             this.renderMessages(messages);
+        }
+    }
+
+    updateNotificationBadge(roomId, show) {
+        // Find the channel item in the sidebar
+        const channelElement = document.querySelector(`.channel-item[data-room-id="${roomId}"]`);
+        if (channelElement) {
+            const badge = channelElement.querySelector('.notification-badge');
+            if (badge) {
+                if (show) {
+                    // ✅ UPDATE THIS LOGIC TO SHOW THE COUNT
+                    const count = this.unreadMessages.get(roomId);
+                    badge.textContent = count > 9 ? '9+' : count; // Show '9+' for counts over 9
+                    badge.classList.remove('hidden');
+                } else {
+                    badge.classList.add('hidden');
+                }
+            }
         }
     }
 

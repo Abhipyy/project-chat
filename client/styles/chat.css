@@ -786,3 +786,34 @@ html, body {
 .user-item:hover .user-item-name {
     color: rgba(255, 255, 255, 0.8); /* A neutral white for the text on hover */
 }
+.notification-badge {
+    /* New green background color */
+    background-color: hsl(var(--online)); /* A Discord-like green */
+
+    /* Make it larger to fit a number */
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+
+    /* Styles for the number inside */
+    color: black;
+    font-size: 11px;
+    font-weight: bold;
+    line-height: 16px;
+    text-align: center;
+    
+    border-radius: 8px; /* This keeps it pill-shaped */
+    margin-left: auto;
+    margin-right: 10px;
+}
+
+.notification-badge.hidden {
+    display: none;
+}
+
+/* Make sure the channel item can contain the positioned badge */
+.channel-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+}

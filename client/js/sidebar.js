@@ -73,6 +73,7 @@ class SidebarManager {
         this.rooms.forEach(room => {
             const channelItem = document.createElement('div');
             channelItem.className = 'channel-item';
+            
             channelItem.dataset.roomId = room.id; // Use data attributes for IDs
             if (this.selectedRoomId === room.id) {
                 channelItem.classList.add('active');
@@ -87,7 +88,7 @@ class SidebarManager {
                 <div class="channel-details">
                     <div class="channel-name">${room.name}</div>
                 </div>
-                ${deleteButton}
+                <div class="notification-badge hidden"></div> ${deleteButton}
             `;
             
             // Event listener for selecting the room
