@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecureChat LAN</title>
+    <link rel="stylesheet" href="styles/auth.css">
+</head>
+<body>
+    <div class="card">
+        <div class="card-header">
+            <div class="card-icon">🔐</div>
+            <h1 class="card-title">SecureChat LAN</h1>
+            <p class="card-description">Join the encrypted local network chat</p>
+        </div>
+        
+        <!-- Login Form -->
+        <div class="card-content" id="loginForm">
+            <form id="loginFormElement">
+                <div class="form-group">
+                    <label for="loginUsername">Username</label>
+                    <input type="text" id="loginUsername" class="input" placeholder="Enter your username" maxlength="20" required>
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Password</label>
+                    <input type="password" id="loginPassword" class="input" placeholder="Enter your password" required>
+                </div>
+                <button type="submit" class="btn" id="loginBtn">
+                    <span>Login to Secure Chat</span>
+                </button>
+                <div class="error-message" id="loginError"></div>
+            </form>
+            
+            <div class="auth-switch">
+                Don't have an account? <a id="showSignup">Sign up</a>
+            </div>
+        </div>
+        
+        <!-- Signup Form -->
+        <div class="card-content hidden" id="signupForm">
+            <form id="signupFormElement">
+                <div class="form-group">
+                    <label for="signupUsername">Username</label>
+                    <input type="text" id="signupUsername" class="input" placeholder="Choose a username" maxlength="20" required>
+                </div>
+                <div class="form-group">
+                    <label for="signupPassword">Password</label>
+                    <input type="password" id="signupPassword" class="input" placeholder="Create a password" required>
+                </div>
+                <div class="form-group">
+                    <label for="confirmPassword">Confirm Password</label>
+                    <input type="password" id="confirmPassword" class="input" placeholder="Confirm your password" required>
+                </div>
+                <button type="submit" class="btn" id="signupBtn">
+                    <span>Create Account</span>
+                </button>
+                <div class="error-message" id="signupError"></div>
+                <div class="success-message" id="signupSuccess"></div>
+            </form>
+            
+            <div class="auth-switch">
+                Already have an account? <a id="showLogin">Login</a>
+            </div>
+        </div>
+        <div class="card-features">
+            <p>🔒 End-to-end encrypted</p>
+            <p>🌐 Local network only</p>
+            <p>🛡️ No data stored remotely</p>
+        </div>
+    </div>
+    
+    <!-- --- CHANGE 1 & 2: Added database.js to the login page --- -->
+    <script src="js/database.js"></script>
+    <script src="js/auth.js"></script>
+</body>
+</html>

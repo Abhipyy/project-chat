@@ -1,0 +1,218 @@
+:root {
+    /* Green & Black Theme Colors */
+    --primary: 142 76% 36%;      /* Green color */
+    --primary-foreground: 0 0% 100%; /* White text on green */
+    --background: 0 0% 0%;       /* Black background */
+    --foreground: 0 0% 100%;     /* White text */
+    --card: 220 20% 10% / 1;           /* Dark gray cards */
+    --card-foreground: 0 0% 100%; /* White text on cards */
+    --muted: 0 0% 20%;          /* Dark muted areas */
+    --muted-foreground: 0 0% 70%; /* Light gray text */
+    --border: 0 0% 25%;         /* Dark borders */
+    --input: 0 0% 15%;          /* Dark input backgrounds */
+    --ring: 142 76% 36%;        /* Green focus ring */
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background-image: linear-gradient(135deg, #111317, #14181f);
+    color: hsl(var(--foreground));
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+
+.card {
+    width: 100%;
+    max-width: 400px;
+    background-color: hsl(var(--card));
+    border-radius: 0.75rem;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+    border: 1px solid hsl(var(--border));
+    overflow: hidden;
+    display: flex;
+    flex-direction: column; /* This makes features stick to bottom */
+}
+    
+
+.card-header {
+    padding: 2rem 2rem 1rem;
+    text-align: center;
+}
+
+.card-icon {
+    width: 4rem;
+    height: 4rem;
+    border-radius: 50%;
+    background: linear-gradient(26deg, hsl(var(--primary)), hsl(142 76% 28%));
+    box-shadow: 0 0 25px hsl(var(--primary) / 0.3); /* FIXED SYNTAX */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1rem;
+    font-size: 1.5rem;
+}
+
+.card-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.card-description {
+    color: hsl(var(--muted-foreground));
+    font-size: 0.875rem;
+}
+
+.card-content {
+    padding: 1rem 2rem 2rem;
+}
+
+.card-features {
+    padding: 0.5rem 0rem 2rem;
+    text-align: center;
+    margin-top: auto; /* Pushes it to the bottom */
+}
+
+.card-features p {
+    font-size: 0.75rem;
+    color: hsl(var(--muted-foreground));
+    margin-bottom: 0.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.form-group {
+    margin-bottom: 1rem;
+}
+
+label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+    color: hsl(var(--foreground));
+}
+
+.input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 1px solid hsl(var(--input));
+    border-radius: 0.5rem;
+    background-color: hsl(220 15% 8%);
+    color: hsl(var(--foreground));
+    font-size: 0.875rem;
+    transition: all 0.2s;
+}
+
+.input:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px hsl(var(--ring)), 0 0 0 4px hsla(var(--ring), 0.2);
+    border-color: hsl(var(--primary));
+}
+
+.input::placeholder {
+    color: hsl(var(--muted-foreground));
+}
+
+.btn {
+    width: 100%;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 0.5rem;
+    background: linear-gradient(135deg, hsl(var(--primary)), hsl(142 76% 28%));
+    color: hsl(var(--primary-foreground));
+    font-weight: 600;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.btn:hover:not(:disabled) {
+    box-shadow: 0 0 15px hsla(var(--primary), 0.5);
+    transform: translateY(-2px);
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.spinner {
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid hsl(var(--primary-foreground));
+    border-top: 2px solid transparent;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.auth-switch {
+    text-align: center;
+    margin-top: 1.5rem;
+    font-size: 0.875rem;
+    color: hsl(var(--muted-foreground));
+}
+
+.auth-switch a {
+    color: hsl(var(--primary));
+    text-decoration: none;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.auth-switch a:hover {
+    text-decoration: underline;
+}
+
+.features {
+    margin-top: 1.5rem;
+    text-align: center;
+}
+
+.features p {
+    font-size: 0.75rem;
+    color: hsl(var(--muted-foreground));
+    margin-bottom: 0.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.error-message {
+    color: #ef4444;
+    font-size: 0.75rem;
+    margin-top: 0.5rem;
+    text-align: center;
+}
+
+.success-message {
+    color: #10b981;
+    font-size: 0.75rem;
+    margin-top: 0.5rem;
+    text-align: center;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.hidden {
+    display: none;
+}
