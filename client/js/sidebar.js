@@ -150,17 +150,19 @@ class SidebarManager {
     // --- MODIFIED: Sends create request to the server ---
     handleCreateGroup() {
         const groupName = document.getElementById('groupName').value.trim();
-        const groupDescription = document.getElementById('groupDescription').value.trim();
-        
+        // ✅ NEW: Get the list of selected members
+        const selectedMembers = Array.from(document.querySelectorAll('#memberSelectionList input:checked')).map(cb => cb.value);
+
         if (!groupName) {
             alert('Please enter a group name');
             return;
         }
 
-        // Emit an event to the server to create the group
+        // ✅ MODIFIED: Send the member list to the server
         this.chatApp.socket.emit('create_group', { 
             name: groupName, 
-            description: groupDescription 
+            description: '', // You can add the description input back if you like
+            members: selectedMembers 
         });
         
         this.hideCreateGroupModal();
@@ -177,6 +179,25 @@ class SidebarManager {
     
     // UI Helper to show/hide the modal
     showCreateGroupModal() {
+        // ✅ NEW: Populate the member selection list
+        const memberList = document.getElementById('memberSelectionList');
+        memberList.innerHTML = ''; // Clear previous list
+        
+        // Get online users from the main ChatApp instance
+        const onlineUsers = this.chatApp.onlineUsers; 
+        onlineUsers.forEach(username => {
+            // Don't list the current user, as they are added by default
+            if (username === this.chatApp.currentUser.username) return;
+
+            const item = document.createElement('div');
+            item.className = 'member-selection-item';
+            item.innerHTML = `
+                <input type="checkbox" id="user-${username}" name="members" value="${username}">
+                <label for="user-${username}">${username}</label>
+            `;
+            memberList.appendChild(item);
+        });
+
         document.getElementById('createGroupModal').style.display = 'flex';
         document.getElementById('groupName').focus();
     }

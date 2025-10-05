@@ -34,6 +34,13 @@ async function initDb() {
             content TEXT NOT NULL,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         );
+        CREATE TABLE IF NOT EXISTS group_members (
+            groupId TEXT NOT NULL,
+            username TEXT NOT NULL,
+            PRIMARY KEY (groupId, username),
+            FOREIGN KEY (groupId) REFERENCES groups(id) ON DELETE CASCADE,
+            FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
+        );
     `);
     await db.run(`INSERT INTO groups (id, name, description) VALUES ('general', 'Secure General', 'Main encrypted channel') ON CONFLICT(id) DO NOTHING`);
     console.log('🏛️ Database tables are ready.');
@@ -89,21 +96,37 @@ function findSocketByUsername(username) {
 // --- Real-Time Socket.IO Logic ---
 io.on('connection', (socket) => {
     socket.on('user_joined', async ({ username }) => {
-        console.log(`✅ User connected: ${username} (Socket ID: ${socket.id})`);
-        onlineUsers.set(socket.id, { username });
-        broadcastOnlineUsers();
+      console.log(`✅ User connected: ${username} (Socket ID: ${socket.id})`);
+      onlineUsers.set(socket.id, { username });
+      broadcastOnlineUsers();
 
-        socket.emit('update_online_users', Array.from(onlineUsers.values()).map(user => ({ username: user.username })));
+      socket.emit('update_online_users', Array.from(onlineUsers.values()).map(user => ({ username: user.username })));
 
-        const groups = await db.all('SELECT * FROM groups');
-        const users = await db.all('SELECT id, username FROM users');
-        const dmPartners = await db.all(`
+      // ✅ FIX: Fetch ONLY the groups the user is a member of
+      const userGroups = await db.all(`
+          SELECT g.id, g.name, g.description 
+          FROM groups g
+          JOIN group_members gm ON g.id = gm.groupId
+          WHERE gm.username = ?
+      `, [username]);
+
+      // Add the "general" group if it's not already there (everyone is implicitly a member of general)
+      const hasGeneral = userGroups.some(g => g.id === 'general');
+      if (!hasGeneral) {
+          const generalGroup = await db.get('SELECT * FROM groups WHERE id = ?', ['general']);
+          if (generalGroup) userGroups.unshift(generalGroup);
+      }
+
+      const users = await db.all('SELECT id, username FROM users');
+      const dmPartners = await db.all(`
           SELECT DISTINCT receiver AS username FROM direct_messages WHERE sender = ?
           UNION
           SELECT DISTINCT sender AS username FROM direct_messages WHERE receiver = ?
       `, [username, username]);
-        socket.emit('initial_data', { groups, users, directMessagePartners: dmPartners });
-    });
+
+      // Send the filtered list of groups to the client
+      socket.emit('initial_data', { groups: userGroups, users, directMessagePartners: dmPartners });
+  });
 
     socket.on('request_room_history', async ({ roomId }) => {
         const messages = await db.all('SELECT * FROM messages WHERE roomId = ? ORDER BY timestamp ASC', [roomId]);
@@ -111,22 +134,36 @@ io.on('connection', (socket) => {
     });
 
     socket.on('send_message', async (messageData) => {
-        const user = onlineUsers.get(socket.id);
-        if (!user || user.username !== messageData.username) return;
+      const user = onlineUsers.get(socket.id);
+      if (!user || user.username !== messageData.username) return;
 
-        try {
-            await db.run('INSERT INTO messages (messageId, roomId, username, content, timestamp) VALUES (?, ?, ?, ?, ?)', [messageData.messageId, messageData.roomId, messageData.username, messageData.content, messageData.timestamp]);
-            
-            const broadcastData = {
-                ...messageData,
-                senderSocketId: socket.id 
-            };
-            socket.broadcast.emit('receive_message', broadcastData);
-            
-            console.log(`💬 [${broadcastData.roomId}] ${user.username}: ${broadcastData.content}`);
-        } catch (error) {
-            console.error("DATABASE ERROR on send_message:", error);
-        }
+      try {
+          // First, verify the sender is a member of the group they're sending to
+          const memberCheck = await db.get('SELECT * FROM group_members WHERE groupId = ? AND username = ?', [messageData.roomId, user.username]);
+          if (!memberCheck) {
+              console.warn(`SECURITY: User ${user.username} tried to send message to group ${messageData.roomId} but is not a member.`);
+              return;
+          }
+
+          await db.run('INSERT INTO messages (messageId, roomId, username, content, timestamp) VALUES (?, ?, ?, ?, ?)', [messageData.messageId, messageData.roomId, messageData.username, messageData.content, messageData.timestamp]);
+          
+          const broadcastData = { ...messageData, senderSocketId: socket.id };
+
+          // Get all members of the group
+          const members = await db.all('SELECT username FROM group_members WHERE groupId = ?', [messageData.roomId]);
+          
+          // Find their sockets and send the message ONLY to them
+          members.forEach(member => {
+              const memberSocket = findSocketByUsername(member.username);
+              if (memberSocket && memberSocket.id !== socket.id) { // Don't send back to the original sender
+                  memberSocket.emit('receive_message', broadcastData);
+              }
+          });
+          
+          console.log(`💬 [${broadcastData.roomId}] ${user.username}: ${broadcastData.content}`);
+      } catch (error) {
+          console.error("DATABASE ERROR on send_message:", error);
+      }
     });
     
     // ✅ --- NEW DIRECT MESSAGE EVENTS ---
@@ -180,22 +217,46 @@ io.on('connection', (socket) => {
 
     // --- END of new DM events ---
 
-    socket.on('create_group', async ({ name, description }) => {
-        const user = onlineUsers.get(socket.id);
-        if (!user) return;
-        const newGroupId = `group_${Date.now()}`;
-        await db.run('INSERT INTO groups (id, name, description) VALUES (?, ?, ?)', [newGroupId, name, description || '']);
-        const groups = await db.all('SELECT * FROM groups');
-        io.emit('initial_data', { groups, users: await db.all('SELECT id, username FROM users') });
-    });
+    socket.on('create_group', async ({ name, description, members }) => {
+      const creator = onlineUsers.get(socket.id)?.username;
+      if (!creator || !members || members.length === 0) return;
+
+      const newGroupId = `group_${crypto.randomUUID()}`;
+      await db.run('INSERT INTO groups (id, name, description) VALUES (?, ?, ?)', [newGroupId, name, description || '']);
+      
+      const allMembers = [...new Set([...members, creator])];
+      const insertPromises = allMembers.map(username => {
+          return db.run('INSERT INTO group_members (groupId, username) VALUES (?, ?)', [newGroupId, username]);
+      });
+      await Promise.all(insertPromises);
+
+      // ✅ FIX: Notify ONLY the members of the new group to update their sidebars
+      const memberSockets = allMembers.map(findSocketByUsername).filter(Boolean);
+      memberSockets.forEach(memberSocket => {
+          memberSocket.emit('force_sidebar_update');
+      });
+      console.log(`Group "${name}" created by ${creator} with members: ${allMembers.join(', ')}`);
+  });
     socket.on('delete_group', async ({ roomId }) => {
-        const user = onlineUsers.get(socket.id);
-        if (!user || roomId === 'general') return;
-        await db.run('DELETE FROM messages WHERE roomId = ?', [roomId]);
-        await db.run('DELETE FROM groups WHERE id = ?', [roomId]);
-        const groups = await db.all('SELECT * FROM groups');
-        io.emit('initial_data', { groups, users: await db.all('SELECT id, username FROM users') });
+    const user = onlineUsers.get(socket.id);
+    if (!user || roomId === 'general') return;
+
+    // ✅ NEW: Find all members of the group before deleting it
+    const members = await db.all('SELECT username FROM group_members WHERE groupId = ?', [roomId]);
+
+    // Delete the group and its related data
+    await db.run('DELETE FROM messages WHERE roomId = ?', [roomId]);
+    await db.run('DELETE FROM group_members WHERE groupId = ?', [roomId]); // Also delete from the new members table
+    await db.run('DELETE FROM groups WHERE id = ?', [roomId]);
+
+    console.log(`Group ${roomId} deleted by ${user.username}.`);
+
+    // ✅ NEW: Notify ONLY the members to update their sidebars
+    const memberSockets = members.map(m => findSocketByUsername(m.username)).filter(Boolean);
+    memberSockets.forEach(memberSocket => {
+        memberSocket.emit('force_sidebar_update');
     });
+});
     socket.on('user_logged_out', () => {
         const user = onlineUsers.get(socket.id);
         if (user) {
@@ -219,7 +280,6 @@ io.on('connection', (socket) => {
 
       try {
           if (isDM) {
-              // ✅ NEW: Handle DM clearing
               await db.run(
                   `DELETE FROM direct_messages 
                   WHERE (sender = ? AND receiver = ?) OR (sender = ? AND receiver = ?)`,
@@ -227,15 +287,10 @@ io.on('connection', (socket) => {
               );
               console.log(`🗑️ DM history between ${user.username} and ${targetUser} cleared.`);
               
-              // Notify both users to clear their view
-              const targetSocket = findSocketByUsername(targetUser);
-              socket.emit('dm_history_cleared', { withUser: targetUser });
-              if (targetSocket) {
-                  targetSocket.emit('dm_history_cleared', { withUser: targetUser });
-              }
+              // ✅ FIX: Broadcast to EVERYONE that a DM was cleared
+              io.emit('dm_history_cleared', { user1: user.username, user2: targetUser });
 
           } else {
-              // Existing logic for groups
               await db.run('DELETE FROM messages WHERE roomId = ?', [roomId]);
               console.log(`🗑️ Chat history for room ${roomId} cleared by ${user.username}.`);
               io.emit('chat_history_cleared', { roomId });
@@ -243,7 +298,7 @@ io.on('connection', (socket) => {
 
       } catch (error) {
           console.error(`Failed to clear chat history:`, error);
-      }
+        }
   });
 });
 

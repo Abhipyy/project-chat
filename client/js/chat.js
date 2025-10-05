@@ -123,11 +123,23 @@ class ChatApp {
                 this.renderMessages([], 'group'); // Render an empty array
             }
         });
-        this.socket.on('dm_history_cleared', async ({ withUser }) => {
-            await window.chatStorage.clearDMMessages(this.currentUser.username, withUser);
-            if (this.currentView === 'dm' && this.selectedRoom?.username === withUser) {
-                this.renderMessages([], 'dm');
+        this.socket.on('dm_history_cleared', async ({ user1, user2 }) => {
+            // ✅ FIX: Check if the current user is one of the participants
+            if (this.currentUser.username === user1 || this.currentUser.username === user2) {
+                const targetUser = this.currentUser.username === user1 ? user2 : user1;
+                
+                await window.chatStorage.clearDMMessages(user1, user2);
+                
+                // If viewing the cleared chat, update the UI
+                if (this.currentView === 'dm' && this.selectedRoom?.username === targetUser) {
+                    this.renderMessages([], 'dm');
+                }
             }
+        });
+        this.socket.on('force_sidebar_update', () => {
+            // This is a simple way to refetch all group/channel data
+            // A more optimized approach would be to only send the new group info
+            this.socket.emit('user_joined', { username: this.currentUser.username });
         });
     }
     setupChatSettingsDropdown() {

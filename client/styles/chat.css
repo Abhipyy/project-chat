@@ -941,3 +941,30 @@ html, body {
     margin-top: 5px;
     z-index: 1001; /* Ensure it's above other content */
 }
+.member-selection-list {
+    max-height: 150px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 5px;
+    background-color: var(--input);
+}
+
+.member-selection-item {
+    display: flex;
+    align-items: center;
+    padding: 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.member-selection-item:hover {
+    background-color: var(--muted);
+}
+
+.member-selection-item input[type="checkbox"] {
+    margin-right: 10px;
+    width: 16px;
+    height: 16px;
+}
