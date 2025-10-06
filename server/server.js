@@ -129,7 +129,7 @@ io.on('connection', (socket) => {
           if (generalGroup) userGroups.unshift(generalGroup);
       }
 
-      const users = await db.all('SELECT id, username FROM users');
+      //const users = await db.all('SELECT id, username FROM users');
       const dmPartners = await db.all(`
           SELECT DISTINCT receiver AS username FROM direct_messages WHERE sender = ?
           UNION
@@ -137,7 +137,7 @@ io.on('connection', (socket) => {
       `, [username, username]);
 
       // Send the filtered list of groups to the client
-      socket.emit('initial_data', { groups: userGroups, users, directMessagePartners: dmPartners });
+      socket.emit('initial_data', { groups: userGroups, directMessagePartners: dmPartners });
   });
 
     socket.on('request_room_history', async ({ roomId }) => {

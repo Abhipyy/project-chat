@@ -21,9 +21,9 @@ class SidebarManager {
     // --- NEW: This method is called by ChatApp when initial data arrives from the server ---
     populate(groups, users) {
         this.rooms = groups;
-        this.users = users;
+        //this.users = users;
         this.renderChannels();
-        this.renderUsers();
+        //this.renderUsers();
     }
 
     // --- NEW: This method is called by ChatApp when the online user list is updated ---
@@ -91,33 +91,33 @@ class SidebarManager {
         const usersList = document.getElementById('usersList');
         const onlineCount = document.getElementById('onlineCount');
         usersList.innerHTML = '';
-        onlineCount.textContent = this.users.length;
+        onlineCount.textContent = this.users.length; // This is now always the correct count
 
         this.users.forEach(user => {
-            // Don't show the current user in the online list
-            if (user.username === this.chatApp.currentUser.username) {
-                onlineCount.textContent = this.users.length -1;
-                return;
-            };
+            // ✅ FIX: REMOVED the "if" block that was hiding the current user.
+            // Now everyone, including you, will be shown in the list.
 
             const userItem = document.createElement('div');
             userItem.className = 'user-item';
             const avatarChar = user.username.charAt(0).toUpperCase();
 
             userItem.innerHTML = `
-            <div class="user-item-avatar online">
-                <span>${avatarChar}</span>
-            </div>
-            <div class="user-item-info">
-                <div class="user-item-name">${user.username}</div>
-            </div>
-        `;
-            userItem.addEventListener('click', () => {
-                // This is a placeholder for now. The main ChatApp will handle the logic.
-                // We'll use a custom event to notify the main app.
-                const event = new CustomEvent('startDM', { detail: { user: user } });
-                document.dispatchEvent(event);
-            });
+                <div class="user-item-avatar online">
+                    <span>${avatarChar}</span>
+                </div>
+                <div class="user-item-info">
+                    <div class="user-item-name">${user.username}</div>
+                </div>
+            `;
+            // Only add the click listener for OTHER users
+            if (user.username !== this.chatApp.currentUser.username) {
+                userItem.addEventListener('click', () => {
+                    const event = new CustomEvent('startDM', { detail: { user: user } });
+                    document.dispatchEvent(event);
+                });
+            } else {
+                userItem.style.cursor = 'default'; // Make your own name not clickable
+            }
             usersList.appendChild(userItem);
         });
     }
