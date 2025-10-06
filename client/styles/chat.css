@@ -442,6 +442,7 @@ body {
 .message-content {
     font-size: 0.875rem;
     line-height: 1.4;
+    overflow-wrap: break-word;
 }
 
 .message-time {
@@ -1015,5 +1016,8 @@ html, body {
     /* Show the back button only on mobile */
     .back-to-sidebar-btn {
         display: block;
+    }
+    .message-input-area {
+        margin-bottom: 3rem; /* Adds space ONLY on screens 768px or smaller */
     }
 }
