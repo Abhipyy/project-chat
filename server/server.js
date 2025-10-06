@@ -7,6 +7,7 @@ const { open } = require('sqlite');
 const path = require('path');
 const bcrypt = require('bcrypt');
 const crypto = require('crypto'); // Used for generating unique IDs
+const os = require('os');
 
 // --- Basic Setup ---
 const app = express();
@@ -333,6 +334,24 @@ io.on('connection', (socket) => {
 // --- Server Start ---
 async function startServer() {
     await initDb();
-    server.listen(3000, '0.0.0.0', () => console.log('🚀 Server is live on port 3000'));
+    const port = 3000; // Define the port
+
+    server.listen(port, '0.0.0.0', () => {
+        console.log(`🚀 Server is live!`);
+
+        // ✅ 2. Add this logic to find and display the network address
+        const networkInterfaces = os.networkInterfaces();
+        console.log('Access it from other devices on the same network:');
+        
+        Object.keys(networkInterfaces).forEach(ifaceName => {
+            networkInterfaces[ifaceName].forEach(iface => {
+                // Skip over internal (i.e. 127.0.0.1) and non-ipv4 addresses
+                if (iface.family === 'IPv4' && !iface.internal) {
+                    console.log(`   -> http://${iface.address}:${port}`);
+                }
+            });
+        });
+        console.log(`   -> http://localhost:${port}`); // Also show localhost
+    });
 }
 startServer();
