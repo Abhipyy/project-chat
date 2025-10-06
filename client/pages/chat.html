@@ -78,6 +78,11 @@
         <div class="chat-area">
             <!-- Chat Header -->
             <div class="chat-header">
+                <button class="back-to-sidebar-btn" id="backToSidebarBtn">
+                    <svg width="20" height="20" viewBox="0 0 24 24">
+                        <path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8l8 8l1.41-1.41L7.83 13H20v-2z"/>
+                    </svg>
+                </button>
                 <div class="room-info">
                     <div class="room-icon" id="roomIcon">🔒</div>
                     <div class="room-details">
@@ -135,6 +140,11 @@
                     </div>
                     
                     <div class="form-group">
+                        <label for="groupDescription">Description (Optional)</label>
+                        <input type="text" id="groupDescription" placeholder="Enter group description" maxlength="100">
+                    </div>
+                    
+                    <div class="form-group">
                         <label>Add Members</label>
                         <div class="member-selection-list" id="memberSelectionList">
                             </div>
@@ -151,6 +161,7 @@
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="../js/database.js"></script>
-    <script src="../js/sidebar.js"></script> <script src="../js/chat.js"></script>
+    <script src="../js/sidebar.js"></script>
+    <script src="../js/chat.js"></script>
 </body>
 </html>

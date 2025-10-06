@@ -968,3 +968,52 @@ html, body {
     width: 16px;
     height: 16px;
 }
+/* --- ✅ NEW MOBILE & RESPONSIVE STYLES --- */
+
+/* By default, the back button is hidden on desktop */
+.back-to-sidebar-btn {
+    display: none;
+    background: none;
+    border: none;
+    color: var(--muted-foreground);
+    cursor: pointer;
+    margin-right: 15px;
+    padding: 5px;
+    border-radius: 50%;
+}
+.back-to-sidebar-btn:hover {
+    background-color: var(--muted);
+    color: var(--foreground);
+}
+
+/* This is the media query for mobile devices */
+@media (max-width: 768px) {
+    .sidebar {
+        width: 100%; /* Sidebar takes full width */
+        border-right: none;
+        transition: transform 0.3s ease-in-out;
+    }
+
+    .chat-area {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        transform: translateX(100%); /* Start off-screen to the right */
+        transition: transform 0.3s ease-in-out;
+    }
+
+    /* This class will be toggled by JavaScript to show the chat area */
+    .chat-layout.show-chat-area .sidebar {
+        transform: translateX(-100%); /* Slide sidebar off-screen to the left */
+    }
+    .chat-layout.show-chat-area .chat-area {
+        transform: translateX(0); /* Slide chat area into view */
+    }
+
+    /* Show the back button only on mobile */
+    .back-to-sidebar-btn {
+        display: block;
+    }
+}

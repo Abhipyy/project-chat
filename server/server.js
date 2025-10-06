@@ -16,6 +16,13 @@ const SALT_ROUNDS = 10;
 let db;
 const onlineUsers = new Map(); // Stores { socket.id -> { username } }
 
+app.use((req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    next();
+});
+
 // --- Middleware & DB Init ---
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'client')));
@@ -53,6 +60,10 @@ app.post('/signup', async (req, res) => {
     try {
         const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
         await db.run('INSERT INTO users (username, password) VALUES (?, ?)', [username, hashedPassword]);
+        
+        // ✅ NEW: Automatically add the new user to the 'general' group
+        await db.run('INSERT INTO group_members (groupId, username) VALUES (?, ?)', ['general', username]);
+
         res.status(201).json({ message: "Account created successfully! Please log in." });
     } catch (error) {
         res.status(error.code === 'SQLITE_CONSTRAINT' ? 409 : 500).json({ message: "Username already exists or server error." });
@@ -134,36 +145,53 @@ io.on('connection', (socket) => {
     });
 
     socket.on('send_message', async (messageData) => {
-      const user = onlineUsers.get(socket.id);
-      if (!user || user.username !== messageData.username) return;
+        const user = onlineUsers.get(socket.id);
+        if (!user || user.username !== messageData.username) return;
 
-      try {
-          // First, verify the sender is a member of the group they're sending to
-          const memberCheck = await db.get('SELECT * FROM group_members WHERE groupId = ? AND username = ?', [messageData.roomId, user.username]);
-          if (!memberCheck) {
-              console.warn(`SECURITY: User ${user.username} tried to send message to group ${messageData.roomId} but is not a member.`);
-              return;
-          }
+        try {
+            // ✅ MODIFIED: The security check is now skipped if the room is 'general'
+            if (messageData.roomId !== 'general') {
+                const memberCheck = await db.get('SELECT * FROM group_members WHERE groupId = ? AND username = ?', [messageData.roomId, user.username]);
+                if (!memberCheck) {
+                    console.warn(`SECURITY: User ${user.username} tried to send message to group ${messageData.roomId} but is not a member.`);
+                    return;
+                }
+            }
 
-          await db.run('INSERT INTO messages (messageId, roomId, username, content, timestamp) VALUES (?, ?, ?, ?, ?)', [messageData.messageId, messageData.roomId, messageData.username, messageData.content, messageData.timestamp]);
-          
-          const broadcastData = { ...messageData, senderSocketId: socket.id };
+            // --- The rest of the function remains the same ---
+            
+            await db.run('INSERT INTO messages (messageId, roomId, username, content, timestamp) VALUES (?, ?, ?, ?, ?)', [messageData.messageId, messageData.roomId, messageData.username, messageData.content, messageData.timestamp]);
+            
+            const broadcastData = { ...messageData, senderSocketId: socket.id };
 
-          // Get all members of the group
-          const members = await db.all('SELECT username FROM group_members WHERE groupId = ?', [messageData.roomId]);
-          
-          // Find their sockets and send the message ONLY to them
-          members.forEach(member => {
-              const memberSocket = findSocketByUsername(member.username);
-              if (memberSocket && memberSocket.id !== socket.id) { // Don't send back to the original sender
-                  memberSocket.emit('receive_message', broadcastData);
-              }
-          });
-          
-          console.log(`💬 [${broadcastData.roomId}] ${user.username}: ${broadcastData.content}`);
-      } catch (error) {
-          console.error("DATABASE ERROR on send_message:", error);
-      }
+            const members = await db.all('SELECT username FROM group_members WHERE groupId = ?', [messageData.roomId]);
+            
+            // Add all online users to the broadcast list if the room is 'general'
+            if (messageData.roomId === 'general') {
+                const allOnlineUsernames = Array.from(onlineUsers.values()).map(u => u.username);
+                // Combine and remove duplicates
+                const broadcastUsernames = [...new Set([...members.map(m => m.username), ...allOnlineUsernames])];
+                
+                broadcastUsernames.forEach(username => {
+                    const memberSocket = findSocketByUsername(username);
+                    if (memberSocket && memberSocket.id !== socket.id) {
+                        memberSocket.emit('receive_message', broadcastData);
+                    }
+                });
+            } else {
+                // Original logic for private groups
+                members.forEach(member => {
+                    const memberSocket = findSocketByUsername(member.username);
+                    if (memberSocket && memberSocket.id !== socket.id) {
+                        memberSocket.emit('receive_message', broadcastData);
+                    }
+                });
+            }
+            
+            console.log(`💬 [${broadcastData.roomId}] ${user.username}: ${broadcastData.content}`);
+        } catch (error) {
+            console.error("DATABASE ERROR on send_message:", error);
+        }
     });
     
     // ✅ --- NEW DIRECT MESSAGE EVENTS ---

@@ -19,15 +19,39 @@ class ChatApp {
         this.init();
     }
 
-    async init() {
+   async init() {
         await this.loadCurrentUser();
         if (!this.currentUser) return;
+        
         this.initializeSidebar();
-        this.setupEventListeners();
-        this.setupUserListToggle();
-        this.setupChatSettingsDropdown();
+        this.setupAllEventListeners(); // ✅ This single function now handles all UI event setup
         this.connectToSocket();
+        
         document.addEventListener('startDM', (e) => this.startDM(e.detail.user));
+    }
+    setupAllEventListeners() {
+        // Message form
+        document.getElementById('messageForm').addEventListener('submit', e => { e.preventDefault(); this.sendMessage(); });
+        document.getElementById('messageInput').addEventListener('input', e => { document.getElementById('charCount').textContent = e.target.value.length; });
+        
+        // Dropdowns, Toggles, and Mobile buttons
+        this.setupSettingsDropdown(); // For main user logout
+        this.setupChatSettingsDropdown(); // For clearing chat
+        this.setupUserListToggle();
+        this.setupMobileView();
+
+        // Multi-account login conflict listener
+        this.listenForAuthChanges();
+    }
+    listenForAuthChanges() {
+        const authChannel = new BroadcastChannel('auth_channel');
+        authChannel.onmessage = (event) => {
+            if (event.data.type === 'login' && event.data.user.username !== this.currentUser.username) {
+                alert('Another account has been logged in on a different tab. This tab will be reloaded.');
+                if (this.socket) this.socket.disconnect();
+                window.location.reload();
+            }
+        };
     }
 
     async loadCurrentUser() {
@@ -46,17 +70,21 @@ class ChatApp {
         this.sidebarManager.onRoomSelected = (room) => this.selectRoom(room, 'group');
     }
 
+    setupMobileView() {
+        document.getElementById('backToSidebarBtn').addEventListener('click', () => {
+            document.querySelector('.chat-layout').classList.remove('show-chat-area');
+        });
+    }
+
     connectToSocket() {
-        this.socket = io();
+       this.socket = io();
         this.socket.emit('user_joined', { username: this.currentUser.username });
 
         this.socket.on('initial_data', (data) => {
             this.sidebarManager.populate(data.groups, data.users);
             if (data.directMessagePartners) {
                 data.directMessagePartners.forEach(partner => {
-                    if (!this.activeDMs.has(partner.username)) {
-                        this.activeDMs.set(partner.username, partner);
-                    }
+                    if (!this.activeDMs.has(partner.username)) this.activeDMs.set(partner.username, partner);
                 });
                 this.renderDMList();
             }
@@ -66,7 +94,7 @@ class ChatApp {
                 this.selectRoom(firstRoom, 'group');
             }
         });
-        
+
         this.socket.on('room_history', async ({ roomId, messages }) => {
             for (const msg of messages) await window.chatStorage.saveMessage(msg, false);
             if (this.currentView === 'group' && this.selectedRoom?.id === roomId) this.renderMessages(messages, 'group');
@@ -115,33 +143,25 @@ class ChatApp {
                 this.selectRoom(this.sidebarManager.getRoomById('general'), 'group');
             }
         });
+
         this.socket.on('chat_history_cleared', async ({ roomId }) => {
-            // Clear the messages from the local IndexedDB
             await window.chatStorage.clearGroupMessages(roomId);
-            // If the cleared chat is the one we're viewing, refresh the screen
-            if (this.currentView === 'group' && this.selectedRoom?.id === roomId) {
-                this.renderMessages([], 'group'); // Render an empty array
-            }
+            if (this.currentView === 'group' && this.selectedRoom?.id === roomId) this.renderMessages([], 'group');
         });
+
         this.socket.on('dm_history_cleared', async ({ user1, user2 }) => {
-            // ✅ FIX: Check if the current user is one of the participants
             if (this.currentUser.username === user1 || this.currentUser.username === user2) {
                 const targetUser = this.currentUser.username === user1 ? user2 : user1;
-                
                 await window.chatStorage.clearDMMessages(user1, user2);
-                
-                // If viewing the cleared chat, update the UI
-                if (this.currentView === 'dm' && this.selectedRoom?.username === targetUser) {
-                    this.renderMessages([], 'dm');
-                }
+                if (this.currentView === 'dm' && this.selectedRoom?.username === targetUser) this.renderMessages([], 'dm');
             }
         });
+
         this.socket.on('force_sidebar_update', () => {
-            // This is a simple way to refetch all group/channel data
-            // A more optimized approach would be to only send the new group info
             this.socket.emit('user_joined', { username: this.currentUser.username });
         });
     }
+
     setupChatSettingsDropdown() {
         const settingsBtn = document.getElementById('chatSettingsBtn');
         const dropdownMenu = document.getElementById('chatDropdownMenu');
@@ -152,30 +172,20 @@ class ChatApp {
             dropdownMenu.classList.toggle('show');
         });
 
-        // ✅ MODIFIED to handle both DMs and groups
         clearChatBtn.addEventListener('click', () => {
             if (!this.selectedRoom) return;
-
-            let confirmationText;
-            let payload;
-
+            let confirmationText, payload;
             if (this.currentView === 'group') {
                 confirmationText = `Are you sure you want to clear all messages in "${this.selectedRoom.name}"? This will delete the history for everyone.`;
                 payload = { roomId: this.selectedRoom.id, isDM: false };
-            } else { // It's a DM
+            } else {
                 confirmationText = `Are you sure you want to clear your chat history with "${this.selectedRoom.username}"? This will delete the history for both of you.`;
                 payload = { targetUser: this.selectedRoom.username, isDM: true };
             }
-
-            if (confirm(confirmationText)) {
-                this.socket.emit('clear_chat_history', payload);
-            }
+            if (confirm(confirmationText)) this.socket.emit('clear_chat_history', payload);
             dropdownMenu.classList.remove('show');
         });
-
-        document.addEventListener('click', () => {
-            dropdownMenu.classList.remove('show');
-        });
+        document.addEventListener('click', () => dropdownMenu.classList.remove('show'));
     }
 
     startDM(user, shouldSelect = true) {
@@ -195,20 +205,19 @@ class ChatApp {
             const userItem = document.createElement('div');
             userItem.className = 'user-item';
             if (this.currentView === 'dm' && this.selectedRoom?.username === user.username) userItem.classList.add('active');
-            
             const avatarChar = user.username.charAt(0).toUpperCase();
 
             // ✅ FIX: Corrected typo from "class." to "class="
             userItem.innerHTML = `
-            <div class="user-item-avatar ${isOnline ? 'online' : 'offline'}">
-                <span>${avatarChar}</span>
-            </div>
-            <div class="user-item-info">
-                <div class="user-item-name">${user.username}</div>
-            </div>
-            <div class="notification-badge hidden"></div>
-            <button class="delete-dm-btn" data-username="${user.username}">×</button>
-        `;
+                <div class="user-item-avatar ${isOnline ? 'online' : 'offline'}">
+                    <span>${avatarChar}</span>
+                </div>
+                <div class="user-item-info">
+                    <div class="user-item-name">${user.username}</div>
+                </div>
+                <div class="notification-badge hidden"></div>
+                <button class="delete-dm-btn" data-username="${user.username}">×</button>
+            `;
             
             userItem.addEventListener('click', e => {
                 if (!e.target.classList.contains('delete-dm-btn')) this.selectRoom(user, 'dm');
@@ -223,18 +232,30 @@ class ChatApp {
         });
     }
 
-    setupEventListeners() {
-        document.getElementById('messageForm').addEventListener('submit', e => {
-            e.preventDefault(); this.sendMessage();
+
+// ✅ REPLACEMENT for setupSettingsDropdown
+setupSettingsDropdown() {
+        const settingsBtn = document.getElementById('settingsBtn');
+        const dropdownMenu = document.getElementById('dropdownMenu');
+        const logoutBtn = document.getElementById('logoutBtn');
+        
+        settingsBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dropdownMenu.classList.toggle('show');
         });
-        document.getElementById('messageInput').addEventListener('input', e => {
-            document.getElementById('charCount').textContent = e.target.value.length;
+
+        logoutBtn.addEventListener('click', async () => {
+            if (confirm('Are you sure you want to logout?')) {
+                if (this.socket) this.socket.emit('user_logged_out');
+                await window.chatStorage.clearAllData();
+                if (this.socket) this.socket.disconnect();
+                localStorage.removeItem('currentUser');
+                window.location.href = '../index.html';
+            }
         });
-        // ✅ FIX: Added this function call back
-        this.setupSettingsDropdown();
     }
     
-    // ✅ FIX: Added this entire function back in
+    // ✅ FIX: Added this function back correctly. It handles the main user logout.
     setupSettingsDropdown() {
         const settingsBtn = document.getElementById('settingsBtn');
         const dropdownMenu = document.getElementById('dropdownMenu');
@@ -252,7 +273,11 @@ class ChatApp {
                 window.location.href = '../index.html';
             }
         });
-        document.addEventListener('click', () => dropdownMenu.classList.remove('show'));
+        document.addEventListener('click', (e) => {
+             if (!settingsBtn.contains(e.target)) {
+                dropdownMenu.classList.remove('show');
+            }
+        });
     }
 
     async selectRoom(room, type = 'group') {
@@ -260,6 +285,10 @@ class ChatApp {
         this.selectedRoom = room;
 
         document.querySelectorAll('.channel-item, .dm-list .user-item').forEach(el => el.classList.remove('active'));
+        if (window.innerWidth <= 768) {
+            document.querySelector('.chat-layout').classList.add('show-chat-area');
+        }
+
         if (type === 'group') {
             document.querySelector(`.channel-item[data-room-id="${room.id}"]`)?.classList.add('active');
             this.unreadMessages.delete(room.id);
@@ -338,7 +367,9 @@ class ChatApp {
         const messagesContainer = document.getElementById('messagesContainer');
         messagesContainer.innerHTML = '';
         messages.forEach(msg => this.appendMessage(msg, type, false));
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        if (messagesContainer.scrollHeight > messagesContainer.clientHeight) {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
     }
 
     appendMessage(msg, type, scroll = true) {
@@ -360,7 +391,6 @@ class ChatApp {
         if (scroll) messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
 
-    // ✅ FIX: Corrected logic to properly save and display messages
     sendMessage() {
         const messageInput = document.getElementById('messageInput');
         const content = messageInput.value.trim();
@@ -384,7 +414,6 @@ class ChatApp {
             window.chatStorage.saveMessage(messageData, true);
         }
         
-        // This correctly adds the new message to the screen
         this.appendMessage(messageData, this.currentView);
         
         messageInput.value = '';

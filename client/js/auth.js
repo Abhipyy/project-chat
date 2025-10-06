@@ -1,4 +1,9 @@
-// DOM Elements
+// In client/js/auth.js
+
+// ✅ 1. ADD THIS LINE: Create a channel for tabs to communicate
+const authChannel = new BroadcastChannel('auth_channel');
+
+// --- DOM Elements ---
 const loginForm = document.getElementById('loginForm');
 const loginFormElement = document.getElementById('loginFormElement');
 const loginUsername = document.getElementById('loginUsername');
@@ -18,12 +23,11 @@ const signupSuccess = document.getElementById('signupSuccess');
 const showSignup = document.getElementById('showSignup');
 const showLogin = document.getElementById('showLogin');
 
-// Setup event listeners when the page loads
+// --- Event Listeners ---
 document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
 });
 
-// Setup event listeners for form switching and submissions
 function setupEventListeners() {
     loginFormElement.addEventListener('submit', handleLogin);
     signupFormElement.addEventListener('submit', handleSignup);
@@ -41,10 +45,7 @@ function setupEventListeners() {
     });
 }
 
-/**
- * Handles the login form submission.
- * Sends user credentials to the server for verification.
- */
+// --- Logic Functions ---
 async function handleLogin(e) {
     e.preventDefault();
     clearMessages();
@@ -69,13 +70,14 @@ async function handleLogin(e) {
         const data = await response.json();
 
         if (response.ok) {
-            // --- CHANGE 1 & 2: Clear old user data from IndexedDB on successful login ---
-            // This ensures a fresh start and prevents seeing another user's cached messages.
             if (window.chatStorage && typeof window.chatStorage.clearAllData === 'function') {
                 await window.chatStorage.clearAllData();
             }
-
             localStorage.setItem('currentUser', JSON.stringify(data.user));
+
+            // ✅ 2. ADD THIS LINE: Notify other tabs about the new login
+            authChannel.postMessage({ type: 'login', user: data.user });
+
             window.location.href = 'pages/chat.html';
         } else {
             showLoginError(data.message || 'Invalid username or password');
@@ -89,10 +91,6 @@ async function handleLogin(e) {
     }
 }
 
-/**
- * Handles the signup form submission.
- * Sends new user details to the server for registration.
- */
 async function handleSignup(e) {
     e.preventDefault();
     clearMessages();
@@ -145,8 +143,7 @@ async function handleSignup(e) {
     }
 }
 
-// --- Helper functions (no changes needed here) ---
-
+// --- Helper Functions ---
 function showLoginError(message) {
     loginError.textContent = message;
 }
