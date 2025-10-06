@@ -40,6 +40,8 @@ class ChatApp {
         this.setupUserListToggle();
         this.setupMobileView();
 
+        
+
         // Multi-account login conflict listener
         this.listenForAuthChanges();
     }
@@ -82,16 +84,29 @@ class ChatApp {
 
         this.socket.on('initial_data', (data) => {
             this.sidebarManager.populate(data.groups, data.users);
+            
+            // ✅ THIS IS THE NEW LOGIC to show offline notifications
+            if (data.groups) {
+                data.groups.forEach(group => {
+                    if (group.unreadCount > 0) {
+                        this.unreadMessages.set(group.id, group.unreadCount);
+                        this.updateNotificationBadge(group.id, true);
+                    }
+                });
+            }
+
             if (data.directMessagePartners) {
                 data.directMessagePartners.forEach(partner => {
-                    if (!this.activeDMs.has(partner.username)) this.activeDMs.set(partner.username, partner);
+                    if (!this.activeDMs.has(partner.username)) {
+                        this.activeDMs.set(partner.username, partner);
+                    }
                 });
                 this.renderDMList();
             }
-            const firstRoom = this.sidebarManager.getRoomById('general');
-            if (firstRoom && !this.selectedRoom) {
-                this.sidebarManager.selectRoomElement(firstRoom.id);
-                this.selectRoom(firstRoom, 'group');
+
+            if (!this.selectedRoom) {
+                const firstRoom = this.sidebarManager.getRoomById('general');
+                if (firstRoom) this.selectRoom(firstRoom, 'group');
             }
         });
 
@@ -291,6 +306,12 @@ setupSettingsDropdown() {
 
         if (type === 'group') {
             document.querySelector(`.channel-item[data-room-id="${room.id}"]`)?.classList.add('active');
+            
+            // ✅ THIS IS THE NEW LOGIC to mark the channel as read
+            if (this.unreadMessages.has(room.id)) {
+                this.socket.emit('mark_channel_as_read', { roomId: room.id });
+            }
+
             this.unreadMessages.delete(room.id);
             this.updateNotificationBadge(room.id, false);
         } else {

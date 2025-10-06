@@ -27,29 +27,52 @@ app.use((req, res, next) => {
 // --- Middleware & DB Init ---
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'client')));
+// In server.js
+
 async function initDb() {
-    db = await open({ filename: './database.db', driver: sqlite3.Database });
-    console.log('✅ Connected to SQLite database.');
+    const dbPath = path.join(__dirname, 'database.db');
+    db = await open({ filename: dbPath, driver: sqlite3.Database });
+    console.log('✅ Connected to SQLite database at:', dbPath);
+    
     await db.exec(`
-        CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, password TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS groups (id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT);
-        CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, messageId TEXT UNIQUE NOT NULL, roomId TEXT NOT NULL, username TEXT NOT NULL, content TEXT NOT NULL, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);
-        CREATE TABLE IF NOT EXISTS direct_messages (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            messageId TEXT UNIQUE NOT NULL,
-            sender TEXT NOT NULL,
-            receiver TEXT NOT NULL,
-            content TEXT NOT NULL,
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, 
+            username TEXT UNIQUE NOT NULL, 
+            password TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS groups (
+            id TEXT PRIMARY KEY, 
+            name TEXT NOT NULL, 
+            description TEXT
+        );
+        CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, 
+            messageId TEXT UNIQUE NOT NULL, 
+            roomId TEXT NOT NULL, 
+            username TEXT NOT NULL, 
+            content TEXT NOT NULL, 
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         );
+        CREATE TABLE IF NOT EXISTS direct_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, 
+            messageId TEXT UNIQUE NOT NULL, 
+            sender TEXT NOT NULL, 
+            receiver TEXT NOT NULL, 
+            content TEXT NOT NULL, 
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- ✅ This is the single, corrected table definition
         CREATE TABLE IF NOT EXISTS group_members (
             groupId TEXT NOT NULL,
             username TEXT NOT NULL,
+            last_read_timestamp DATETIME,
             PRIMARY KEY (groupId, username),
             FOREIGN KEY (groupId) REFERENCES groups(id) ON DELETE CASCADE,
             FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
         );
     `);
+    
     await db.run(`INSERT INTO groups (id, name, description) VALUES ('general', 'Secure General', 'Main encrypted channel') ON CONFLICT(id) DO NOTHING`);
     console.log('🏛️ Database tables are ready.');
 }
@@ -108,37 +131,50 @@ function findSocketByUsername(username) {
 // --- Real-Time Socket.IO Logic ---
 io.on('connection', (socket) => {
     socket.on('user_joined', async ({ username }) => {
-      console.log(`✅ User connected: ${username} (Socket ID: ${socket.id})`);
-      onlineUsers.set(socket.id, { username });
-      broadcastOnlineUsers();
+        console.log(`✅ User connected: ${username} (Socket ID: ${socket.id})`);
+        onlineUsers.set(socket.id, { username });
+        broadcastOnlineUsers();
 
-      socket.emit('update_online_users', Array.from(onlineUsers.values()).map(user => ({ username: user.username })));
+        // ✅ THIS IS THE CORRECTED QUERY
+        // It now correctly fetches the last_read_timestamp for each group
+        const userGroups = await db.all(`
+            SELECT g.id, g.name, g.description, gm.last_read_timestamp 
+            FROM groups g
+            JOIN group_members gm ON g.id = gm.groupId
+            WHERE gm.username = ?
+        `, [username]);
 
-      // ✅ FIX: Fetch ONLY the groups the user is a member of
-      const userGroups = await db.all(`
-          SELECT g.id, g.name, g.description 
-          FROM groups g
-          JOIN group_members gm ON g.id = gm.groupId
-          WHERE gm.username = ?
-      `, [username]);
+        // This loop calculates the unread messages for each group
+        for (const group of userGroups) {
+            const result = await db.get(
+                `SELECT COUNT(messageId) AS unreadCount 
+                FROM messages 
+                WHERE roomId = ? AND timestamp > ?`,
+                [group.id, group.last_read_timestamp || 0]
+            );
+            group.unreadCount = result.unreadCount;
+        }
 
-      // Add the "general" group if it's not already there (everyone is implicitly a member of general)
-      const hasGeneral = userGroups.some(g => g.id === 'general');
-      if (!hasGeneral) {
-          const generalGroup = await db.get('SELECT * FROM groups WHERE id = ?', ['general']);
-          if (generalGroup) userGroups.unshift(generalGroup);
-      }
+        const dmPartners = await db.all(`
+            SELECT DISTINCT receiver AS username FROM direct_messages WHERE sender = ?
+            UNION
+            SELECT DISTINCT sender AS username FROM direct_messages WHERE receiver = ?
+        `, [username, username]);
 
-      //const users = await db.all('SELECT id, username FROM users');
-      const dmPartners = await db.all(`
-          SELECT DISTINCT receiver AS username FROM direct_messages WHERE sender = ?
-          UNION
-          SELECT DISTINCT sender AS username FROM direct_messages WHERE receiver = ?
-      `, [username, username]);
+        socket.emit('initial_data', { groups: userGroups, directMessagePartners: dmPartners });
+    });
 
-      // Send the filtered list of groups to the client
-      socket.emit('initial_data', { groups: userGroups, directMessagePartners: dmPartners });
-  });
+    socket.on('mark_channel_as_read', async ({ roomId }) => {
+        const user = onlineUsers.get(socket.id);
+        if (!user) return;
+        
+        // Update the last_read_timestamp to the current time for that user and group
+        await db.run(
+            `UPDATE group_members SET last_read_timestamp = CURRENT_TIMESTAMP 
+            WHERE groupId = ? AND username = ?`,
+            [roomId, user.username]
+        );
+    });
 
     socket.on('request_room_history', async ({ roomId }) => {
         const messages = await db.all('SELECT * FROM messages WHERE roomId = ? ORDER BY timestamp ASC', [roomId]);
